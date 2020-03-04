@@ -228,7 +228,9 @@ void ATrafficLightManager::GenerateTriggerBox(
     UTrafficLightComponent* TrafficLightComponent,
     float BoxSize)
 {
-  AActor* ParentActor = TrafficLightComponent->GetOwner();
+  // convert from m to cm
+  float UEBoxSize = 100 * BoxSize;
+  AActor *ParentActor = TrafficLightComponent->GetOwner();
   FTransform ReferenceTransform = GetMap()->ComputeTransform(waypoint);
   UBoxComponent *BoxComponent = NewObject<UBoxComponent>(ParentActor);
   BoxComponent->RegisterComponent();
@@ -238,15 +240,15 @@ void ATrafficLightManager::GenerateTriggerBox(
   BoxComponent->SetWorldTransform(ReferenceTransform);
   BoxComponent->OnComponentBeginOverlap.AddDynamic(TrafficLightComponent,
       &USignComponent::OnOverlapBeginInterface);
-  BoxComponent->SetBoxExtent(FVector(BoxSize, BoxSize, BoxSize), true);
+  BoxComponent->SetBoxExtent(FVector(UEBoxSize, UEBoxSize, UEBoxSize), true);
 
   // Debug
-  DrawDebugBox(GetWorld(),
-      ReferenceTransform.GetLocation(),
-      BoxComponent->GetScaledBoxExtent(),
-      ReferenceTransform.GetRotation(),
-      FColor(0, 0, 200),
-      true);
+  // DrawDebugBox(GetWorld(),
+  //     ReferenceTransform.GetLocation(),
+  //     BoxComponent->GetScaledBoxExtent(),
+  //     ReferenceTransform.GetRotation(),
+  //     FColor(0, 0, 200),
+  //     true);
 }
 
 void ATrafficLightManager::GenerateTriggerBoxes()
@@ -284,8 +286,8 @@ void ATrafficLightManager::GenerateTriggerBoxes()
             auto signal_waypoint = GetMap()->GetWaypoint(
                 waypoint.road_id, lane, SignalReference->GetS()).get();
 
-            // Get 90% of the half size of the width of the lane and convert from m to cm
-            float BoxSize = 100*static_cast<float>(
+            // Get 90% of the half size of the width of the lane
+            float BoxSize = static_cast<float>(
                 0.9*GetMap()->GetLaneWidth(waypoint)/2.0);
             // Get min and max
             double LaneLength = GetMap()->GetLane(signal_waypoint).GetLength();

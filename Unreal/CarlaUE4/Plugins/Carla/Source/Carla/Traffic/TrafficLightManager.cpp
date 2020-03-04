@@ -6,6 +6,7 @@
 
 #include "TrafficLightManager.h"
 #include "Game/CarlaStatics.h"
+#include "Components/BoxComponent.h"
 #include <string>
 
 ATrafficLightManager::ATrafficLightManager()
@@ -102,7 +103,72 @@ void ATrafficLightManager::GenerateTrafficLights()
   {
     return;
   }
-  const auto& Signals = GetMap()->GetSignals();
+
+  RemoveExistingTrafficLights();
+
+  SpawnTrafficLights();
+
+  GenerateTriggerBoxes();
+}
+
+// Called when the game starts
+void ATrafficLightManager::BeginPlay()
+{
+  Super::BeginPlay();
+}
+
+ATrafficLightGroup* ATrafficLightManager::GetTrafficGroup(
+    carla::road::JuncId JunctionId)
+{
+  if (TrafficGroups.Contains(JunctionId))
+  {
+    return TrafficGroups[JunctionId];
+  }
+  return nullptr;
+}
+
+
+UTrafficLightController* ATrafficLightManager::GetController(
+    FString ControllerId)
+{
+  if (TrafficControllers.Contains(ControllerId))
+  {
+    return TrafficControllers[ControllerId];
+  }
+  return nullptr;
+}
+
+UTrafficLightComponent* ATrafficLightManager::GetTrafficLight(FString SignId)
+{
+  if (!TrafficLights.Contains(SignId))
+  {
+    return nullptr;
+  }
+  return TrafficLights[SignId];
+}
+
+void ATrafficLightManager::RemoveExistingTrafficLights()
+{
+  for (auto GroupPair : TrafficGroups)
+  {
+    auto *TrafficLightGroup = GroupPair.Value;
+    TrafficLightGroup->Destroy();
+  }
+
+  for (auto LightPair : TrafficLights)
+  {
+    auto *TrafficLightComponent = LightPair.Value;
+    TrafficLightComponent->GetOwner()->Destroy();
+  }
+
+  TrafficGroups.Empty();
+  TrafficControllers.Empty();
+  TrafficLights.Empty();
+}
+
+void ATrafficLightManager::SpawnTrafficLights()
+{
+    const auto &Signals = GetMap()->GetSignals();
   for(const auto& ControllerPair : GetMap()->GetControllers())
   {
     const auto& Controller = ControllerPair.second;
@@ -137,37 +203,107 @@ void ATrafficLightManager::GenerateTrafficLights()
   }
 }
 
-// Called when the game starts
-void ATrafficLightManager::BeginPlay()
+std::vector<int> GenerateRange(int a, int b)
 {
-  Super::BeginPlay();
-
+  std::vector<int> result;
+  if (a < b)
+  {
+    for(int i = a; i <= b; ++i)
+    {
+      result.push_back(i);
+    }
+  }
+  else
+  {
+    for(int i = a; i >= b; --i)
+    {
+      result.push_back(i);
+    }
+  }
+  return result;
 }
 
-ATrafficLightGroup* ATrafficLightManager::GetTrafficGroup(carla::road::JuncId JunctionId)
+void ATrafficLightManager::GenerateTriggerBox(
+    carla::road::element::Waypoint &waypoint,
+    UTrafficLightComponent* TrafficLightComponent,
+    float BoxSize)
 {
-  if (TrafficGroups.Contains(JunctionId))
-  {
-    return TrafficGroups[JunctionId];
-  }
-  return nullptr;
+  AActor* ParentActor = TrafficLightComponent->GetOwner();
+  FTransform ReferenceTransform = GetMap()->ComputeTransform(waypoint);
+  UBoxComponent *BoxComponent = NewObject<UBoxComponent>(ParentActor);
+  BoxComponent->RegisterComponent();
+  BoxComponent->AttachToComponent(
+      ParentActor->GetRootComponent(),
+      FAttachmentTransformRules::KeepRelativeTransform);
+  BoxComponent->SetWorldTransform(ReferenceTransform);
+  BoxComponent->OnComponentBeginOverlap.AddDynamic(TrafficLightComponent,
+      &USignComponent::OnOverlapBeginInterface);
+  BoxComponent->SetBoxExtent(FVector(BoxSize, BoxSize, BoxSize), true);
+
+  // Debug
+  DrawDebugBox(GetWorld(),
+      ReferenceTransform.GetLocation(),
+      BoxComponent->GetScaledBoxExtent(),
+      ReferenceTransform.GetRotation(),
+      FColor(0, 0, 200),
+      true);
 }
 
-
-UTrafficLightController* ATrafficLightManager::GetController(FString ControllerId)
+void ATrafficLightManager::GenerateTriggerBoxes()
 {
-  if (TrafficControllers.Contains(ControllerId))
-  {
-    return TrafficControllers[ControllerId];
-  }
-  return nullptr;
-}
+  const double epsilon = 0.00001;
 
-UTrafficLightComponent* ATrafficLightManager::GetTrafficLight(FString SignId)
-{
-  if (!TrafficLights.Contains(SignId))
+  // Spawn trigger boxes
+  auto waypoints = GetMap()->GenerateWaypointsOnRoadEntries();
+  std::unordered_set<carla::road::RoadId> ExploredRoads;
+  for (auto & waypoint : waypoints)
   {
-    return nullptr;
+    // Check if we alredy explored this road
+    if (ExploredRoads.count(waypoint.road_id) > 0)
+    {
+      continue;
+    }
+    ExploredRoads.insert(waypoint.road_id);
+
+    // Multiple times for same road (performance impact, not in behavior)
+    auto SignalReferences = GetMap()->GetLane(waypoint).
+        GetRoad()->GetInfos<carla::road::element::RoadInfoSignal>();
+    for (auto *SignalReference : SignalReferences)
+    {
+      FString SignalId(SignalReference->GetSignalId().c_str());
+      if(TrafficLights.Contains(SignalId))
+      {
+        auto *TrafficLightComponent = TrafficLights[SignalId];
+        for(auto &validity : SignalReference->GetValidities())
+        {
+          for(auto lane : GenerateRange(validity._from_lane, validity._to_lane))
+          {
+            if(lane == 0)
+              continue;
+
+            auto signal_waypoint = GetMap()->GetWaypoint(
+                waypoint.road_id, lane, SignalReference->GetS()).get();
+
+            // Get 90% of the half size of the width of the lane and convert from m to cm
+            float BoxSize = 100*static_cast<float>(
+                0.9*GetMap()->GetLaneWidth(waypoint)/2.0);
+            // Get min and max
+            double LaneLength = GetMap()->GetLane(signal_waypoint).GetLength();
+            double LaneDistance = GetMap()->GetLane(signal_waypoint).GetDistance();
+            if(lane < 0)
+            {
+              signal_waypoint.s = FMath::Clamp(signal_waypoint.s - BoxSize,
+                  LaneDistance + epsilon, LaneDistance + LaneLength - epsilon);
+            }
+            else
+            {
+              signal_waypoint.s = FMath::Clamp(signal_waypoint.s + BoxSize,
+                  LaneDistance + epsilon, LaneDistance + LaneLength - epsilon);
+            }
+            GenerateTriggerBox(signal_waypoint, TrafficLightComponent, BoxSize);
+          }
+        }
+      }
+    }
   }
-  return TrafficLights[SignId];
 }

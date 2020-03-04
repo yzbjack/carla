@@ -26,12 +26,27 @@ public:
   UFUNCTION(BlueprintCallable)
   void SetSignId(const FString &Id);
 
+  UFUNCTION(BlueprintCallable)
+  void OnOverlapBeginInterface(UPrimitiveComponent *OverlappedComp,
+      AActor *OtherActor,
+      UPrimitiveComponent *OtherComp,
+      int32 OtherBodyIndex,
+      bool bFromSweep,
+      const FHitResult &SweepResult);
+
 protected:
   // Called when the game starts
   virtual void BeginPlay() override;
 
   // Called every frame
   virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+  virtual void OnOverlapBegin(UPrimitiveComponent *OverlappedComp,
+      AActor *OtherActor,
+      UPrimitiveComponent *OtherComp,
+      int32 OtherBodyIndex,
+      bool bFromSweep,
+      const FHitResult &SweepResult);
 
 private:
 

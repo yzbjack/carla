@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "SignComponent.h"
 #include "TrafficLightState.h"
+#include "Carla/Vehicle/WheeledVehicleAIController.h"
 #include "TrafficLightComponent.generated.h"
 
 class ATrafficLightManager;
@@ -46,6 +47,13 @@ protected:
   // Called every frame
   virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+  virtual void OnOverlapBegin(UPrimitiveComponent *OverlappedComp,
+      AActor *OtherActor,
+      UPrimitiveComponent *OtherComp,
+      int32 OtherBodyIndex,
+      bool bFromSweep,
+      const FHitResult &SweepResult) override;
+
 private:
 
   friend ATrafficLightManager;
@@ -57,4 +65,7 @@ private:
 
   UPROPERTY()
   ATrafficLightGroup *TrafficLightGroup = nullptr;
+
+  UPROPERTY()
+  TArray<AWheeledVehicleAIController*> Vehicles;
 };

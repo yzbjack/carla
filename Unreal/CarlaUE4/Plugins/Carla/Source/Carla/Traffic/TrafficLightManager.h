@@ -69,4 +69,15 @@ private:
   USceneComponent *SceneComponent;
 
   boost::optional<carla::road::Map> Map;
+
+  void RemoveExistingTrafficLights();
+
+  void SpawnTrafficLights();
+
+  void GenerateTriggerBoxes();
+
+  void GenerateTriggerBox(
+      carla::road::element::Waypoint &waypoint,
+      UTrafficLightComponent* TrafficLightComponent,
+      float BoxSize);
 };

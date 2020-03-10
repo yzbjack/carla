@@ -14,6 +14,7 @@
 
 /// Class In charge of creating and assigning traffic
 /// light groups, controllers and components.
+/// It creates traffic signals as well (stop, yields, etc)
 UCLASS()
 class CARLA_API ATrafficLightManager : public AActor
 {
@@ -35,10 +36,10 @@ public:
   UTrafficLightController* GetController(FString ControllerId);
 
   UFUNCTION(BlueprintCallable)
-  UTrafficLightComponent* GetTrafficLight(FString SignId);
+  USignComponent* GetTrafficSign(FString SignId);
 
   UFUNCTION(CallInEditor)
-  void GenerateTrafficLights();
+  void GenerateSignalsAndTrafficLights();
 
 protected:
   // Called when the game starts or when spawned
@@ -58,12 +59,15 @@ private:
   UPROPERTY()
   TMap<FString, UTrafficLightController *> TrafficControllers;
 
-  // Mapped references to individual TrafficLightComponents
+  // References to traffic signals
   UPROPERTY()
-  TMap<FString, UTrafficLightComponent *> TrafficLights;
+  TMap<FString, USignComponent *> TrafficSigns;
 
   UPROPERTY(EditAnywhere, Category= "Traffic Light Manager")
   TSubclassOf<AActor> TrafficLightModel;
+
+  UPROPERTY(EditAnywhere, Category= "Traffic Light Manager")
+  TMap<FString, TSubclassOf<AActor>> TrafficSignsModels;
 
   UPROPERTY(Category = "Traffic Light Manager", VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
   USceneComponent *SceneComponent;
@@ -74,10 +78,12 @@ private:
 
   void SpawnTrafficLights();
 
+  void SpawnSignals();
+
   void GenerateTriggerBoxes();
 
   void GenerateTriggerBox(
       carla::road::element::Waypoint &waypoint,
-      UTrafficLightComponent* TrafficLightComponent,
+      USignComponent* SignComponent,
       float BoxSize);
 };

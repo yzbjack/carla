@@ -34,6 +34,21 @@ void USignComponent::OnOverlapBeginInterface(UPrimitiveComponent *OverlappedComp
       SweepResult);
 }
 
+void USignComponent::OnOverlapEndInterface(UPrimitiveComponent *OverlappedComp,
+    AActor *OtherActor,
+    UPrimitiveComponent *OtherComp,
+    int32 OtherBodyIndex,
+    bool bFromSweep,
+    const FHitResult &SweepResult)
+{
+  OnOverlapEnd(OverlappedComp,
+      OtherActor,
+      OtherComp,
+      OtherBodyIndex,
+      bFromSweep,
+      SweepResult);
+}
+
 void USignComponent::OnOverlapBegin(UPrimitiveComponent *OverlappedComp,
       AActor *OtherActor,
       UPrimitiveComponent *OtherComp,
@@ -41,6 +56,35 @@ void USignComponent::OnOverlapBegin(UPrimitiveComponent *OverlappedComp,
       bool bFromSweep,
       const FHitResult &SweepResult)
 {
+  ACarlaWheeledVehicle * Vehicle = Cast<ACarlaWheeledVehicle>(OtherActor);
+  if (Vehicle)
+  {
+    AWheeledVehicleAIController* VehicleController =
+        Cast<AWheeledVehicleAIController>(Vehicle->GetController());
+    if (VehicleController)
+    {
+      // VehicleController->SetTrafficLightState(TrafficSignState);
+    }
+  }
+}
+
+void USignComponent::OnOverlapEnd(UPrimitiveComponent *OverlappedComp,
+      AActor *OtherActor,
+      UPrimitiveComponent *OtherComp,
+      int32 OtherBodyIndex,
+      bool bFromSweep,
+      const FHitResult &SweepResult)
+{
+  ACarlaWheeledVehicle * Vehicle = Cast<ACarlaWheeledVehicle>(OtherActor);
+  if (Vehicle)
+  {
+    AWheeledVehicleAIController* VehicleController =
+        Cast<AWheeledVehicleAIController>(Vehicle->GetController());
+    if (VehicleController)
+    {
+      // VehicleController->SetTrafficLightState(TrafficSignState);
+    }
+  }
 }
 
 // Called every frame
@@ -56,4 +100,8 @@ const FString& USignComponent::GetSignId() const
 
 void USignComponent::SetSignId(const FString &Id) {
   SignId = Id;
+}
+
+void USignComponent::SetTrafficSignState(ETrafficSignState State) {
+  TrafficSignState = State;
 }

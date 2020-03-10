@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
 #include "Carla/OpenDrive/OpenDrive.h"
+#include "TrafficSignBase.h"
 #include "SignComponent.generated.h"
 
 /// Class representing an OpenDRIVE Signal
@@ -27,7 +28,17 @@ public:
   void SetSignId(const FString &Id);
 
   UFUNCTION(BlueprintCallable)
+  void SetTrafficSignState(ETrafficSignState State);
+
+  UFUNCTION(BlueprintCallable)
   void OnOverlapBeginInterface(UPrimitiveComponent *OverlappedComp,
+      AActor *OtherActor,
+      UPrimitiveComponent *OtherComp,
+      int32 OtherBodyIndex,
+      bool bFromSweep,
+      const FHitResult &SweepResult);
+
+  void OnOverlapEndInterface(UPrimitiveComponent *OverlappedComp,
       AActor *OtherActor,
       UPrimitiveComponent *OtherComp,
       int32 OtherBodyIndex,
@@ -47,6 +58,15 @@ protected:
       int32 OtherBodyIndex,
       bool bFromSweep,
       const FHitResult &SweepResult);
+
+  virtual void OnOverlapEnd(UPrimitiveComponent *OverlappedComp,
+      AActor *OtherActor,
+      UPrimitiveComponent *OtherComp,
+      int32 OtherBodyIndex,
+      bool bFromSweep,
+      const FHitResult &SweepResult);
+
+  ETrafficSignState TrafficSignState;
 
 private:
 

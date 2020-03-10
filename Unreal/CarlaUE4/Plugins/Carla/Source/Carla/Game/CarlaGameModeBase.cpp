@@ -182,6 +182,8 @@ void ACarlaGameModeBase::SpawnActorFactories()
   }
 }
 
+std::vector<int> GenerateRange(int a, int b);
+
 void ACarlaGameModeBase::ParseOpenDrive(const FString &MapName)
 {
   std::string opendrive_xml = carla::rpc::FromFString(UOpenDrive::LoadXODR(MapName));
@@ -256,51 +258,62 @@ void ACarlaGameModeBase::DebugShowSignals(bool enable)
   }
 
   auto waypoints = Map->GenerateWaypointsOnRoadEntries();
+  std::unordered_set<carla::road::RoadId> ExploredRoads;
   for (auto & waypoint : waypoints)
   {
-    auto SignalReferences = Map->GetLane(waypoint).GetRoad()->GetInfos<carla::road::element::RoadInfoSignal>();
+    // Check if we alredy explored this road
+    if (ExploredRoads.count(waypoint.road_id) > 0)
+    {
+      continue;
+    }
+    ExploredRoads.insert(waypoint.road_id);
+
+    // Multiple times for same road (performance impact, not in behavior)
+    auto SignalReferences = GetMap()->GetLane(waypoint).
+        GetRoad()->GetInfos<carla::road::element::RoadInfoSignal>();
     for (auto *SignalReference : SignalReferences)
     {
-      double current_s = waypoint.s;
-      double signal_s = SignalReference->GetS();
+      FString SignalId(SignalReference->GetSignalId().c_str());
+      for(auto &validity : SignalReference->GetValidities())
+      {
+        for(auto lane : GenerateRange(validity._from_lane, validity._to_lane))
+        {
+          if(lane == 0)
+            continue;
 
-      double delta_s = signal_s - current_s;
-      FTransform ReferenceTransform;
-      if (delta_s == 0)
-      {
-        ReferenceTransform = Map->ComputeTransform(waypoint);
-      }
-      else if (waypoint.lane_id < 0)
-      {
-        auto signal_waypoint = Map->GetNext(waypoint, FMath::Abs(delta_s)).front();
-        ReferenceTransform = Map->ComputeTransform(signal_waypoint);
-      }
-      else if(waypoint.lane_id > 0)
-      {
-        auto signal_waypoint = Map->GetNext(waypoint, FMath::Abs(delta_s)).front();
-        ReferenceTransform = Map->ComputeTransform(signal_waypoint);
-      }
-      else
-      {
-        continue;
-      }
-      DrawDebugSphere(
-          World,
-          ReferenceTransform.GetLocation(),
-          50.0f,
-          10,
-          FColor(0, 255, 0),
-          true
-      );
+          auto signal_waypoint = GetMap()->GetWaypoint(
+              waypoint.road_id, lane, SignalReference->GetS()).get();
 
-      DrawDebugLine(
-          World,
-          ReferenceTransform.GetLocation(),
-          FTransform(SignalReference->GetSignal()->GetTransform()).GetLocation(),
-          FColor(0, 255, 0),
-          true
-      );
+          FTransform ReferenceTransform = Map->ComputeTransform(signal_waypoint);
+          // draw
+          DrawDebugSphere(
+              World,
+              ReferenceTransform.GetLocation(),
+              50.0f,
+              10,
+              FColor(0, 255, 0),
+              true
+          );
+
+          DrawDebugLine(
+              World,
+              ReferenceTransform.GetLocation(),
+              FTransform(SignalReference->GetSignal()->GetTransform()).GetLocation(),
+              FColor(0, 255, 0),
+              true
+          );
+
+          FString Text = FString("Ref to: ") + FString(SignalReference->GetSignalId().c_str());
+          UKismetSystemLibrary::DrawDebugString (
+              World,
+              ReferenceTransform.GetLocation() + ReferenceTransform.GetRotation().GetUpVector() * 250.0f,
+              Text,
+              nullptr,
+              FLinearColor(0, 255, 0, 255),
+              10000.0f
+          );
+        }
+      }
     }
   }
-
 }

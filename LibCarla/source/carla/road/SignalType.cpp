@@ -6,6 +6,9 @@
 
 #include "SignalType.h"
 
+#include <vector>
+#include <algorithm>
+
 namespace carla {
 namespace road {
 
@@ -115,8 +118,20 @@ namespace road {
     return "381";
   } // = "381";
 
-  bool SignalType::IsTrafficLight() {
-    return false;
+  bool SignalType::IsTrafficLight(const std::string &type) {
+    // Types corresponding to traffic lights
+    const std::vector<std::string> traffic_light_types =
+        {"1000001", "1000002", "1000009", "1000010", "1000011",
+         "1000007", "1000014", "1000015", "1000016", "1000017",
+         "1000018", "1000019", "1000013", "1000020", "1000008",
+         "1000012", "F", "W", "A"};
+    auto it = std::find(
+        traffic_light_types.begin(), traffic_light_types.end(), type);
+    if (it != traffic_light_types.end()){
+      return true;
+    } else {
+      return false;
+    }
   }
 
 }

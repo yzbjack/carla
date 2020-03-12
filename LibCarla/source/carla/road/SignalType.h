@@ -51,7 +51,7 @@ namespace road {
     static const std::string RecomendedSpeed(); // = "380";
     static const std::string RecomendedSpeedEnd(); // = "381";
 
-    static bool IsTrafficLight();
+    static bool IsTrafficLight(const std::string &type);
   };
 
 } // road

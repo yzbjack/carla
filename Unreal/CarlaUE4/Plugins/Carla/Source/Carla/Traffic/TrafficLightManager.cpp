@@ -339,6 +339,11 @@ void ATrafficLightManager::GenerateTriggerBoxes()
         GetRoad()->GetInfos<carla::road::element::RoadInfoSignal>();
     for (auto *SignalReference : SignalReferences)
     {
+      if (!carla::road::SignalType::IsTrafficLight(
+          SignalReference->GetSignal()->GetType()))
+      {
+        continue;
+      }
       FString SignalId(SignalReference->GetSignalId().c_str());
       if(TrafficSigns.Contains(SignalId))
       {

@@ -75,6 +75,7 @@ void AOpenDriveGenerator::GenerateRoadMesh()
   float Resolution = 2.f;
   float WallHeight = 1.f;
   float AdditionalWidth = .6f;
+  bool MeshVisibility = true;
   if (FPaths::FileExists(ConfigFilePath)) {
     FString ConfigData;
     TArray<FString> Lines;
@@ -94,6 +95,10 @@ void AOpenDriveGenerator::GenerateRoadMesh()
       else if (Key == "additional_width")
       {
         AdditionalWidth = FCString::Atof(*Value);
+      }
+      else if (Key == "mesh_visibility")
+      {
+        MeshVisibility = Value.ToBool();
       }
     }
   }
@@ -173,6 +178,7 @@ void AOpenDriveGenerator::GenerateRoadMesh()
   {
     UE_LOG(LogCarla, Error, TEXT("The road collision mesh could not be generated!"));
   }
+  SetActorHiddenInGame(!MeshVisibility);
 }
 
 void AOpenDriveGenerator::GeneratePoles()

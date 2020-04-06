@@ -959,7 +959,15 @@ namespace road {
 
     for (auto &&pair : _data.GetRoads()) {
       const auto &road = pair.second;
+      if (road.IsJunction()) {
+        continue;
+      }
       out_mesh += *mesh_factory.Generate(road);
+    }
+
+    for (auto &pair : _data.GetJunctions()) {
+      const auto &junction = pair.second;
+      out_mesh += *mesh_factory.Generate(junction, _data);
     }
 
     return out_mesh;

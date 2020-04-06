@@ -12,6 +12,7 @@
 #include <carla/road/Road.h>
 #include <carla/road/LaneSection.h>
 #include <carla/road/Lane.h>
+#include <carla/road/MapData.h>
 
 namespace carla {
 namespace geom {
@@ -34,6 +35,8 @@ namespace geom {
 
     /// Generates a mesh that defines a lane
     std::unique_ptr<Mesh> Generate(const road::Lane &lane) const;
+
+    std::unique_ptr<Mesh> Generate(const road::Junction &junction, const road::MapData &map) const;
 
     // =========================================================================
     // -- Generation parameters ------------------------------------------------

@@ -119,6 +119,10 @@ namespace geom {
 
     const std::vector<vertex_type> &GetVertices() const;
 
+    std::vector<vertex_type> &GetVertices() {
+      return _vertices;
+    }
+
     size_t GetVerticesNum() const;
 
     const std::vector<normal_type> &GetNormals() const;

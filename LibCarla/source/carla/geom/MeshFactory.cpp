@@ -86,11 +86,13 @@ namespace geom {
   std::unique_ptr<Mesh> MeshFactory::Generate(const road::Junction &junction, const road::MapData &map) const {
     geom::Mesh out_mesh;
 
+    // Get meshes
+    //unique ptr
     std::vector<geom::Mesh> lane_meshes;
     for(const auto pair : junction.GetConnections()) {
       const auto &connection = pair.second;
       const auto &road = map.GetRoads().at(connection.connecting_road);
-
+//debug assert (connection.connecting_road)
       for (auto &&lane_section : road.GetLaneSections()) {
         for (auto &&lane_pair : lane_section.GetLanes()) {
           lane_meshes.push_back(*Generate(lane_pair.second));
@@ -101,37 +103,174 @@ namespace geom {
 
     carla::log_warning("Num meshes: ", lane_meshes.size());
 
+    // Build rtree structure
     struct VertexInfo {
       Mesh::vertex_type * vertex;
+      size_t lane_mesh_idx;
       bool is_static;
     };
     using Rtree = geom::PointCloudRtree<VertexInfo>;
     using Point = Rtree::BPoint;
     Rtree rtree;
+    size_t lane_mesh_idx = 0;
     for(auto &mesh : lane_meshes) {
       //for(auto& vertex : mesh.GetVertices()) {
       for(size_t i = 0; i < mesh.GetVerticesNum(); ++i) {
         auto& vertex = mesh.GetVertices()[i];
         Point point(vertex.x, vertex.y, vertex.z);
         if (i < 2 || i >= mesh.GetVerticesNum() - 2) {
-          rtree.InsertElement({point, {&vertex, true}});
+          rtree.InsertElement({point, {&vertex, lane_mesh_idx, true}});
         } else {
-          rtree.InsertElement({point, {&vertex, false}});
+          rtree.InsertElement({point, {&vertex, lane_mesh_idx, false}});
         }
       }
+      ++lane_mesh_idx;
     }
 
-    auto Laplacian = [](Mesh::vertex_type & vertex, std::vector<Rtree::TreeElement> &neighbors) -> double {
-      double sum = 0;
-      for(auto &element : neighbors) {
-        sum += (element.second.vertex->z - vertex.z);
-      }
-      return sum / neighbors.size();
-    };
 
-    double lambda = 0.0;
-    int iterations = 30;
-    std::ifstream param_file("$HOME/params.txt");
+    // struct TriangleInfo {
+    //   Mesh::vertex_type *v1, *v2, *v3;
+    //   size_t lane_mesh_idx;
+    // };
+    // using BPoint = boost::geometry::model::point<float, 3, boost::geometry::cs::cartesian>;
+    // using BBox = boost::geometry::model::box<BPoint>;
+    // using BPolygon = boost::geometry::model::polygon<BPoint, true, true>;
+    // using PolyTreeElement = std::pair<BBox, TriangleInfo>;
+    // using RtreePoly = boost::geometry::index::rtree<PolyTreeElement, boost::geometry::index::linear<16>>;
+    // RtreePoly _rtree;
+    // lane_mesh_idx = 0;
+    // for(auto &mesh : lane_meshes) {
+    //   for(size_t idx = 0; idx < mesh.GetIndexesNum() - 2; idx+=3) {
+    //     auto &v1 = mesh.GetVertices()[idx + 0];
+    //     auto &v2 = mesh.GetVertices()[idx + 1];
+    //     auto &v3 = mesh.GetVertices()[idx + 2];
+    //     BPoint pv1(v1.x, v1.y, v1.z);
+    //     BPoint pv2(v2.x, v2.y, v2.z);
+    //     BPoint pv3(v3.x, v3.y, v3.z);
+    //     BPolygon poly;
+    //     poly.outer().push_back(pv1);poly.outer().push_back(pv2);poly.outer().push_back(pv3);
+    //     BBox box = boost::geometry::return_envelope<BBox>(poly);
+    //     _rtree.insert({box, {&v1, &v2, &v3, lane_mesh_idx}});
+    //   }
+    //   ++lane_mesh_idx;
+    // }
+
+    // Find neighbors for each vertex and their weight
+    struct VertexWeight {
+      Mesh::vertex_type* vertex;
+      double weight;
+    };
+    struct VertexNeighbors {
+      Mesh::vertex_type* vertex;
+      std::vector<VertexWeight> neighbors;
+    };
+    std::vector<VertexNeighbors> vertices_neighborhoods;
+    lane_mesh_idx = 0;
+    for(auto &mesh : lane_meshes) {
+      for(size_t i = 0; i < mesh.GetVerticesNum(); ++i) {
+        if (i > 2 && i < mesh.GetVerticesNum() - 2) {
+          auto& vertex = mesh.GetVertices()[i];
+          Point point(vertex.x, vertex.y, vertex.z);
+          auto closest_vertices = rtree.GetNearestNeighbours(point, 20);
+          VertexNeighbors vertex_neighborhood;
+          vertex_neighborhood.vertex = &vertex;
+          for(auto& close_vertex : closest_vertices) {
+            auto &vertex_info = close_vertex.second;
+            if(&vertex == vertex_info.vertex) {
+              continue;
+            }
+            // compute weight
+            double distance3D = geom::Math::Distance(vertex, *vertex_info.vertex);
+            if(distance3D > 5) {
+              continue;
+            }
+            if(abs(distance3D) < std::numeric_limits<double>::epsilon()) {
+              continue;
+            }
+            double weight = geom::Math::Clamp(1.0 / (distance3D), 0.0, 100000.0);
+
+            if(lane_mesh_idx == vertex_info.lane_mesh_idx) {
+              weight *= 2;
+              if(vertex_info.is_static) {
+                weight *= 2;
+              }
+            }
+
+            vertex_neighborhood.neighbors.push_back({vertex_info.vertex, weight});
+          }
+          vertices_neighborhoods.push_back(vertex_neighborhood);
+        }
+      }
+      ++lane_mesh_idx;
+    }
+
+    // auto Laplacian = [&](const VertexInfo &vertex_info, std::vector<Rtree::TreeElement> &neighbors) -> double {
+    //   double sum = 0;
+    //   double sum_weight = 0;
+    //   for(auto &element : neighbors) {
+    //     double distance3D = geom::Math::Distance(*element.second.vertex, *vertex_info.vertex);
+    //     //double distance = abs(element.second.vertex->z - vertex_info.vertex->z);
+    //     if(abs(distance3D) < std::numeric_limits<double>::epsilon()) {
+    //       continue;
+    //     }
+    //     double weight = geom::Math::Clamp(1.0 / distance3D, 0.0, 0.5);
+    //     if(vertex_info.lane_mesh_idx == element.second.lane_mesh_idx){
+    //       weight = 1;
+    //     }else{
+    //       weight = 0.5;
+    //     }
+    //     sum += (element.second.vertex->z - vertex_info.vertex->z)*weight;
+    //     sum_weight += weight;
+    //   }
+    //   if(sum_weight > 0)
+    //     return sum / sum_weight;
+    //   else
+    //     return 0;
+    // };
+    // // Run iterative algorithm
+    // double lambda = 1.0;
+    // int iterations = 30;
+    // std::ifstream param_file("/home/axel/params.txt");
+    // if(param_file){
+    //   std::string line;
+    //   std::getline(param_file, line);
+    //   lambda = std::atof(line.c_str());
+    //   std::getline(param_file, line);
+    //   iterations = std::atoi(line.c_str());
+    // }
+    // carla::log_warning("iterations: ", iterations, "lambda:", lambda);
+    // for(int iter = 0; iter < iterations; ++iter) {
+    //   lane_mesh_idx = 0;
+    //   for(auto &mesh : lane_meshes) {
+    //     for(size_t i = 0; i < mesh.GetVerticesNum(); ++i) {
+    //       auto& vertex = mesh.GetVertices()[i];
+    //       Point point(vertex.x, vertex.y, vertex.z);
+    //       auto neighbors = rtree.GetNearestNeighbours(point, 10);
+    //       if (i > 2 && i < mesh.GetVerticesNum() - 2) {
+    //         vertex.z += static_cast<float>(lambda*Laplacian({&vertex, lane_mesh_idx}, neighbors));
+    //       }
+    //     }
+    //     ++lane_mesh_idx;
+    //   }
+    // }
+
+    // Laplacian function
+    auto Laplacian = [&](const Mesh::vertex_type* vertex, const std::vector<VertexWeight> &neighbors) -> double {
+      double sum = 0;
+      double sum_weight = 0;
+      for(auto &element : neighbors) {
+        sum += (element.vertex->z - vertex->z)*element.weight;
+        sum_weight += element.weight;
+      }
+      if(sum_weight > 0)
+        return sum / sum_weight;
+      else
+        return 0;
+    };
+    // Run iterative algorithm
+    double lambda = 0.5;
+    int iterations = 100;
+    std::ifstream param_file("/home/axel/params.txt");
     if(param_file){
       std::string line;
       std::getline(param_file, line);
@@ -141,16 +280,9 @@ namespace geom {
     }
     carla::log_warning("iterations: ", iterations, "lambda:", lambda);
     for(int iter = 0; iter < iterations; ++iter) {
-      for(auto &mesh : lane_meshes) {
-        for(size_t i = 0; i < mesh.GetVerticesNum(); ++i) {
-          auto& vertex = mesh.GetVertices()[i];
-          Point point(vertex.x, vertex.y, vertex.z);
-          auto neighbors = rtree.GetNearestNeighbours(point, 10);
-          neighbors.erase(neighbors.begin());
-          if (i > 2 && i < mesh.GetVerticesNum() - 2) {
-            vertex.z += static_cast<float>(lambda*Laplacian(vertex, neighbors));
-          }
-        }
+      for (auto& vertex_neighborhood : vertices_neighborhoods) {
+        auto * vertex = vertex_neighborhood.vertex;
+        vertex->z += static_cast<float>(lambda*Laplacian(vertex, vertex_neighborhood.neighbors));
       }
     }
 

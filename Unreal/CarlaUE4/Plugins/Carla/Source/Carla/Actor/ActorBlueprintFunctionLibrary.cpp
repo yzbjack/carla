@@ -846,6 +846,12 @@ void UActorBlueprintFunctionLibrary::MakeLidarDefinition(
   DropOffAtZeroIntensity.Type = EActorAttributeType::Float;
   DropOffAtZeroIntensity.RecommendedValues = { TEXT("0.4") };
 
+  if (Id == "ray_cast_raw") {
+    DropOffGenRate.RecommendedValues = { TEXT("0.0") };
+    DropOffIntensityLimit.RecommendedValues = { TEXT("1.0") };
+    DropOffAtZeroIntensity.RecommendedValues = { TEXT("0.0") };
+  }
+
   Definition.Variations.Append(
       {Channels, Range, PointsPerSecond, Frequency, UpperFOV, LowerFOV,
           AtmospAttenRate, DropOffGenRate, DropOffIntensityLimit,
